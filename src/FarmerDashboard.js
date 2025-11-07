@@ -12,10 +12,7 @@ const categoryOptions = {
 
 export default function FarmerDashboard() {
   const [farmName, setFarmName] = useState(""); 
-  const [products, setProducts] = useState([
-    { category: "", product: "", price: "", quantity: "" }
-  ]);
-
+  const [products, setProducts] = useState([{ category: "", product: "", price: "", quantity: "" }]);
   const navigate = useNavigate();
 
   const handleAddRow = () => {
@@ -23,9 +20,7 @@ export default function FarmerDashboard() {
   };
 
   const handleRemoveRow = (index) => {
-    const updated = [...products];
-    updated.splice(index, 1);
-    setProducts(updated);
+    setProducts(products.filter((_, i) => i !== index));
   };
 
   const handleChange = (index, field, value) => {
@@ -36,26 +31,43 @@ export default function FarmerDashboard() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!farmName) return alert("Please enter farm name");
+    if (!farmName.trim()) return alert("Please enter your farm name.");
 
-    for (let i = 0; i < products.length; i++) {
-      const { category, product, price, quantity } = products[i];
-      if (!category || !product || !price || !quantity) {
-        return alert("All fields are required for each product");
+    try {
+      // Check user authentication
+      const user = auth.currentUser;
+      if (!user) {
+        alert("You must be logged in to add products.");
+        navigate("/login");
+        return;
       }
 
-      await addDoc(collection(db, "products"), {
-        category,
-        productName: product,
-        price,
-        quantity,
-        farmName 
-      });
-    }
+      // Add each product to Firestore
+      for (let i = 0; i < products.length; i++) {
+        const { category, product, price, quantity } = products[i];
+        if (!category || !product || !price || !quantity) {
+          alert("All fields are required for each product.");
+          return;
+        }
 
-    alert("All products added successfully!");
-    setProducts([{ category: "", product: "", price: "", quantity: "" }]);
-    setFarmName("");
+        await addDoc(collection(db, "products"), {
+          category,
+          productName: product,
+          price: Number(price),
+          quantity: Number(quantity),
+          farmName,
+          farmerId: user.uid, // 🔥 track who added it
+          createdAt: new Date()
+        });
+      }
+
+      alert("✅ All products added successfully!");
+      setProducts([{ category: "", product: "", price: "", quantity: "" }]);
+      setFarmName("");
+    } catch (error) {
+      console.error("❌ Firestore Error:", error);
+      alert("Failed to add products: " + error.message);
+    }
   };
 
   const handleLogout = async () => {
@@ -74,46 +86,75 @@ export default function FarmerDashboard() {
       <button onClick={handleLogout} style={{ marginBottom: "20px" }}>Logout</button>
 
       <form onSubmit={handleSubmit}>
-        <label>Farm Name:
+        <label>
+          Farm Name:
           <input
             type="text"
             value={farmName}
-            onChange={e => setFarmName(e.target.value)}
-            placeholder="Enter farm name once for all products"
+            onChange={(e) => setFarmName(e.target.value)}
+            placeholder="Enter your farm name"
           />
         </label>
-        <br/><br/>
+        <br /><br />
 
         {products.map((p, index) => (
           <div key={index} style={{ border: "1px solid #ccc", padding: "15px", marginBottom: "10px", borderRadius: "10px" }}>
-            <label>Category:
-              <select value={p.category} onChange={e => handleChange(index, "category", e.target.value)}>
+            <label>
+              Category:
+              <select value={p.category} onChange={(e) => handleChange(index, "category", e.target.value)}>
                 <option value="">--Select--</option>
-                {Object.keys(categoryOptions).map(c => <option key={c} value={c}>{c}</option>)}
+                {Object.keys(categoryOptions).map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
             </label>
-            <br/>
-            <label>Product:
-              <select value={p.product} onChange={e => handleChange(index, "product", e.target.value)} disabled={!p.category}>
+            <br />
+            <label>
+              Product:
+              <select
+                value={p.product}
+                onChange={(e) => handleChange(index, "product", e.target.value)}
+                disabled={!p.category}
+              >
                 <option value="">--Select--</option>
-                {p.category && categoryOptions[p.category].map(prod => <option key={prod} value={prod}>{prod}</option>)}
+                {p.category && categoryOptions[p.category].map(prod => (
+                  <option key={prod} value={prod}>{prod}</option>
+                ))}
               </select>
             </label>
-            <br/>
-            <label>Price (₹):
-              <input type="number" value={p.price} onChange={e => handleChange(index, "price", e.target.value)} />
+            <br />
+            <label>
+              Price (₹):
+              <input
+                type="number"
+                value={p.price}
+                onChange={(e) => handleChange(index, "price", e.target.value)}
+                min="1"
+              />
             </label>
-            <br/>
-            <label>Quantity:
-              <input type="number" value={p.quantity} onChange={e => handleChange(index, "quantity", e.target.value)} />
+            <br />
+            <label>
+              Quantity:
+              <input
+                type="number"
+                value={p.quantity}
+                onChange={(e) => handleChange(index, "quantity", e.target.value)}
+                min="1"
+              />
             </label>
-            <br/>
-            {products.length > 1 && <button type="button" onClick={() => handleRemoveRow(index)}>Remove</button>}
+            <br />
+            {products.length > 1 && (
+              <button type="button" onClick={() => handleRemoveRow(index)}>
+                Remove
+              </button>
+            )}
           </div>
         ))}
 
-        <button type="button" onClick={handleAddRow} style={{ marginRight: "10px" }}>Add Another Product</button>
-        <button type="submit">Submit All Products</button>
+        <button type="button" onClick={handleAddRow} style={{ marginRight: "10px" }}>
+          ➕ Add Another Product
+        </button>
+        <button type="submit">✅ Submit All Products</button>
       </form>
     </div>
   );
